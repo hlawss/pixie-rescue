@@ -21,33 +21,7 @@
 <canvas id="game"></canvas>
 <script>
 // Image loading
-const images = {
-  creditButtonHover: "images/creditoutline.png",
-  creditButton: "images/credit.png",
-  coin: "images/coin.png",
-  slash: "images/slash.png",
-  road: "images/road2.png",
-  bird: "images/bird.png",
-  mainMenuHover: "images/mainmenuhighlight.png",
-  retryButtonHover: "images/retryoutline.png",
-  resumeButtonHover: "images/resumehighlight.png",
-  mainMenu: "images/mainm.png",
-  player: "player.png",
-  playerDuck: "player-duck.png",
-  playerJump: "player-jump.png",
-  obstacle: "obstacle.png",
-  logo: "pixie-logo.png",
-  startButton: "images/startgame.png",
-  startButtonHover: "images/startgamehighlight.png",
-  pauseTitle: "pause.png",
-  resumeButton: "images/resume.png",
-  retryButton: "images/retry.png",
-  gameOverTitle: "images/gameover.png",
-  bg1: "cloud_background.png",
-  bg2: "cloud_midground.png",
-  bg3: "cloud_foreground.png",
-  mainBg: "mainbg.png"
-};
+const images = {};
 
 const sounds = {
   coin: new Audio("sounds/coin.mp3"),
@@ -72,6 +46,18 @@ function unlockAudio() {
 
 }
 const imageSources = {
+  num0: "images/0.png",
+  num1: "images/1.png",
+  num2: "images/2.png",
+  num3: "images/3.png",
+  num4: "images/4.png",
+  num5: "images/5.png",
+  num6: "images/6.png",
+  num7: "images/7.png",
+  num8: "images/8.png",
+  num9: "images/9.png",
+  scoreLabel: "images/scoreLabel.png",
+  levelLabel: "images/levelLabel.png",
   creditButtonHover: "images/creditoutline.png",
   creditButton: "images/credit.png",
   coin: "images/coin.png",
@@ -382,7 +368,6 @@ function gameLoop() {
         }
       }
       if (obs.x + obs.width < player.x && !obs.scored) {
-        score++;
         obs.scored = true;
       }
       if (obs.x + obs.width < 0) obstacles.splice(i, 1);
@@ -422,6 +407,7 @@ function gameLoop() {
         sounds.slashHit.play();
         slashHitConnected = true;
         airborneObstacles.splice(i, 1);
+        score++;
         continue;
       }
 
@@ -484,14 +470,16 @@ function gameLoop() {
     ) {
       coins.splice(i, 1);
       sounds.coin.play();
-      score += 5; // Bonus for coin collection
+      score += 1; // Bonus for coin collection
     }
 
     if (coin.x + coin.width < 0) coins.splice(i, 1);
   }
 
-  ctx.fillText("Score: " + score, 20, 40);
-  ctx.fillText("Difficulty: " + difficultyLevel, 20, 70);
+  ctx.drawImage(images.scoreLabel, 10, -5, images.scoreLabel.width * 0.15, images.scoreLabel.height * 0.15);
+  drawNumberImage(score, 10 + images.scoreLabel.width * 0.15 + 10, 5);
+  ctx.drawImage(images.levelLabel, 10, 40, images.levelLabel.width * 0.15, images.levelLabel.height * 0.15);
+  drawNumberImage(difficultyLevel, 10 + images.levelLabel.width * 0.15 + 10, 48);
 
   requestAnimationFrame(gameLoop);
 }
@@ -502,6 +490,9 @@ const totalImages = Object.keys(imageSources).length;
 for (let key in imageSources) {
   images[key] = new Image();
   images[key].src = imageSources[key];
+  images[key].onerror = () => {
+    console.error("Failed to load image:", imageSources[key]);
+  };
   images[key].onload = () => {
     loadedImages++;
     if (loadedImages === totalImages) {
@@ -599,6 +590,25 @@ window.addEventListener("keyup", e => {
 
 let creditButtonBounds = { x: 0, y: 0, width: 0, height: 0 };
 
+
+function drawNumberImage(value, x, y, digitWidth = 110, digitHeight = 165) {
+  const str = value.toString();
+  for (let i = 0; i < str.length; i++) {
+    const digit = str[i];
+    const img = images["num" + digit];
+    if (img instanceof HTMLImageElement && img.complete) {
+      const spacing = 20;
+      const offsetX = x + i * spacing - 35;
+      const offsetY = y - 17;
+      const adjustedY = i === 1 ? offsetY - 2 : offsetY;
+      ctx.drawImage(img, offsetX, adjustedY, digitWidth, digitHeight);
+    } else {
+      ctx.fillStyle = "#000";
+      ctx.font = `${digitHeight}px sans-serif`;
+      ctx.fillText(digit, x + i * digitWidth - 35, y + digitHeight - 17);
+    }
+  }
+}
 function drawStartMenu() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(images.mainBg, 0, 0, canvas.width, canvas.height);
@@ -725,29 +735,32 @@ function drawGameOver() {
   const y = 50;
   ctx.drawImage(images.gameOverTitle, x, y, width, height);
 
+  // Draw final score below the title
+  ctx.drawImage(images.scoreLabel, canvas.width / 2 - 120, y + height - 35, images.scoreLabel.width * 0.2, images.scoreLabel.height * 0.2);
+  drawNumberImage(score, canvas.width / 2 + 80, y + height - 3);
+  drawNumberImage(score, canvas.width / 2 + 80, y + height - 3);
+
   const retryRatio = images.retryButton.width / images.retryButton.height;
   const retryHeight = 160;
   const retryWidth = retryHeight * retryRatio;
-
-  const menuRatio = images.mainMenu.width / images.mainMenu.height;
-  const menuHeight = 160;
-  const menuWidth = retryWidth;
-
   const spacing = 40;
-  const totalWidth = retryWidth + spacing + menuWidth;
+  const totalWidth = retryWidth + spacing + retryWidth;
 
   const retryX = canvas.width / 2 - totalWidth / 2;
-  const retryY = y + height + 40;
+  const retryY = y + height + 80;
   const menuX = retryX + retryWidth + spacing;
   const menuY = retryY;
-  const isHoveringMainMenu = mouseX >= menuX && mouseX <= menuX + menuWidth && mouseY >= menuY && mouseY <= menuY + menuHeight;
+
+  const isHoveringMainMenu = mouseX >= menuX && mouseX <= menuX + retryWidth && mouseY >= menuY && mouseY <= menuY + retryHeight;
   const mainMenuImage = isHoveringMainMenu ? images.mainMenuHover : images.mainMenu;
-  ctx.drawImage(mainMenuImage, menuX, menuY, menuWidth, menuHeight);
+  ctx.drawImage(mainMenuImage, menuX, menuY, retryWidth, retryHeight);
+
   const isHoveringRetry = mouseX >= retryX && mouseX <= retryX + retryWidth && mouseY >= retryY && mouseY <= retryY + retryHeight;
   const retryImage = isHoveringRetry ? images.retryButtonHover : images.retryButton;
   ctx.drawImage(retryImage, retryX, retryY, retryWidth, retryHeight);
+
   retryButtonBounds = { x: retryX, y: retryY, width: retryWidth, height: retryHeight };
-  mainMenuButtonBounds = { x: menuX, y: menuY, width: menuWidth, height: menuHeight };
+  mainMenuButtonBounds = { x: menuX, y: menuY, width: retryWidth, height: retryHeight };
 }
 </script>
 </body>
