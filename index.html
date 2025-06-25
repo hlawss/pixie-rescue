@@ -471,7 +471,7 @@ function gameLoop() {
     // Draw and update coins
   for (let i = coins.length - 1; i >= 0; i--) {
     const coin = coins[i];
-    coin.x -= 4;
+    if (!gameOver) coin.x -= 4;
     ctx.drawImage(images.coin, coin.x, coin.y, coin.width, coin.height);
 
     // Collision with player
