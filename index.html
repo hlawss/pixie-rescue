@@ -444,8 +444,8 @@ function gameLoop() {
       if (attackTimer === 0) {
         isAttacking = false;
         if (!slashHitConnected) {
-          sounds.slash.play();
-        }
+  new Audio("sounds/slash.mp3").play();
+}
       }
     }
 
