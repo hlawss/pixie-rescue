@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pixie Rescue</title>
@@ -480,7 +481,7 @@ window.addEventListener("keydown", e => {
     isAttacking = true;
     attackTimer = ATTACK_DURATION;
   }
-  if (e.key.toLowerCase() === "k") debugMode = !debugMode;
+  if (e.key.toLowerCase() === "d") debugMode = !debugMode;
   keys[e.key] = true;
   if (e.key === "Escape" && gameStarted && !gameOver) {
     isPaused = !isPaused;
