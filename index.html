@@ -13,8 +13,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pixie Rescue</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #ffd6eb; }
-    canvas { display: block; background: #ffe6f0; }
+    body { margin: 0; overflow: hidden; background: #ffd6eb; height: 100vh; }
+    canvas { display: block; background: #ffe6f0; height: 100%; }
   </style>
 </head>
 <body>
@@ -115,6 +115,8 @@ let keys = {};
 let gameOver = false;
 let isAttacking = false;
 let attackTimer = 0;
+let lastAttackTime = 0;
+const ATTACK_COOLDOWN = 800; // milliseconds
 const ATTACK_DURATION = 10;
 let isPaused = false;
 let debugMode = false;
@@ -510,7 +512,7 @@ for (let key in imageSources) {
 
 // Input Handling and Menu Logic
 canvas.addEventListener("click", e => {
-  if (e.offsetX >= creditButtonBounds.x && e.offsetX <= creditButtonBounds.x + creditButtonBounds.width &&
+  if (!gameStarted && e.offsetX >= creditButtonBounds.x && e.offsetX <= creditButtonBounds.x + creditButtonBounds.width &&
       e.offsetY >= creditButtonBounds.y && e.offsetY <= creditButtonBounds.y + creditButtonBounds.height) {
     window.location.href = "credit.html";
     return;
@@ -564,9 +566,11 @@ canvas.addEventListener("mousemove", e => {
 window.addEventListener("keydown", e => {
   unlockAudio();
   console.log('keydown:', e.key);
-  if ((e.key.toLowerCase() === "f" || e.key === " ") && !isAttacking) {
+  const now = Date.now();
+  if ((e.key.toLowerCase() === "f" || e.key === " ") && !isAttacking && now - lastAttackTime >= ATTACK_COOLDOWN) {
     isAttacking = true;
     attackTimer = ATTACK_DURATION;
+    lastAttackTime = now;
     // We will play the slash sound in the game loop only if no bird is hit
   }
   if (e.key.toLowerCase() === "k") debugMode = !debugMode;
