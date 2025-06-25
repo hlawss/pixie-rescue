@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pixie Rescue</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #ffd6eb; }
+    canvas { display: block; background: #ffe6f0; }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+// Image loading
+const images = {};
+const imageSources = {
+  coin: "images/coin.png",
+  slash: "images/slash.png",
+  road: "images/road2.png",
+  bird: "images/bird.png",
+  mainMenuHover: "images/mainmenuhighlight.png",
+  retryButtonHover: "images/retryoutline.png",
+  resumeButtonHover: "images/resumehighlight.png",
+  mainMenu: "images/mainm.png",
+  player: "player.png",
+  playerDuck: "player-duck.png",
+  playerJump: "player-jump.png",
+  obstacle: "obstacle.png",
+  logo: "pixie-logo.png",
+  startButton: "images/startgame.png",
+  startButtonHover: "images/startgamehighlight.png",
+  pauseTitle: "pause.png",
+  resumeButton: "images/resume.png",
+  retryButton: "images/retry.png",
+  gameOverTitle: "images/gameover.png",
+  bg1: "cloud_background.png",
+  bg2: "cloud_midground.png",
+  bg3: "cloud_foreground.png",
+  mainBg: "mainbg.png"
+};
+
+// Canvas setup
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Game constants and variables
+const GROUND_Y = canvas.height - 100;
+const gravity = 0.6;
+let score = 0;
+let gameStarted = false;
+let keys = {};
+let gameOver = false;
+let isAttacking = false;
+let attackTimer = 0;
+const ATTACK_DURATION = 10;
+let isPaused = false;
+let debugMode = false;
+let jumpPressed = false;
+let pausedSnapshot = null;
+let gameOverSnapshot = null;
+let difficultyLevel = 0;
+
+let buttonX, buttonY, buttonWidth, buttonHeight;
+let isHoveringStart = false;
+let resumeButtonBounds = { x: 0, y: 0, width: 0, height: 0 };
+let retryButtonBounds = { x: 0, y: 0, width: 0, height: 0 };
+let mainMenuButtonBounds = { x: 0, y: 0, width: 0, height: 0 };
+
+  let mouseX = 0, mouseY = 0;
+let obstacles = [];
+let airborneObstacles = [];
+let bgX1 = 0, bgX2 = 0, bgX3 = 0;
+let roadX = 0;
+const bgSpeed1 = 0.2, bgSpeed2 = 0.5, bgSpeed3 = 1;
+let frameCount = 0;
+let obstacleInterval = 200;
+let obstacleSpeed = 3;
+let difficultyTimer = 0;
+let coins = [];
+let groundTrapSpawningEnabled = true;
+
+// Player, Bird, Obstacle classes
+class Bird {
+  constructor(x, width, height) {
+    this.x = x;
+    this.y = Math.random() * (GROUND_Y - 250 - 100) + 100;
+    this.width = width;
+    this.height = height;
+    this.speed = 2.5;
+  }
+  update() {
+    this.x -= this.speed;
+  }
+  draw() {
+    ctx.drawImage(images.bird, this.x, this.y, this.width, this.height);
+  }
+  isColliding(player) {
+    const a = player.hitbox;
+    const b = this;
+    const hitboxInset = 0.05;
+    const bx = b.x + b.width * hitboxInset / 2;
+    const by = b.y + b.height * hitboxInset / 2;
+    const bWidth = b.width * (1 - hitboxInset);
+    const bHeight = b.height * (1 - hitboxInset);
+    return a.x < bx + bWidth && a.x + a.width > bx && a.y < by + bHeight && a.y + a.height > by;
+  }
+}
+
+class Obstacle {
+  constructor(x, width, height, isTop = false) {
+    this.x = x;
+    this.width = width;
+    this.height = height;
+    this.speed = 3;
+    this.isTop = isTop;
+    this.y = isTop ? GROUND_Y - 50 - height : GROUND_Y - height + 80;
+  }
+  update() {
+    this.x -= this.speed;
+  }
+  draw() {
+    ctx.drawImage(images.obstacle, this.x, this.y, this.width, this.height);
+  }
+  isColliding(player) {
+    const a = player.hitbox;
+    const b = this;
+    const hitboxInset = 0.2;
+    const bx = b.x + b.width * hitboxInset / 2;
+    const by = b.y + b.height * hitboxInset / 2;
+    const bWidth = b.width * (1 - hitboxInset);
+    const bHeight = b.height * (1 - hitboxInset);
+    return a.x < bx + bWidth && a.x + a.width > bx && a.y < by + bHeight && a.y + a.height > by;
+  }
+}
+
+class Player {
+  constructor() {
+    this.width = 80;
+    this.height = 150;
+    this.x = 200;
+    this.y = GROUND_Y - this.height + 70;
+    this.dy = 0;
+    this.jumpPower = -22;
+    this.isJumping = false;
+    this.isDucking = false;
+  }
+  update() {
+    this.isDucking = keys["ArrowDown"] || keys["s"] || keys["S"];
+    
+    this.dy += gravity;
+    if (this.isJumping && this.isDucking) {
+      this.dy += 1.5; // extra downward force
+    }
+    if (!jumpPressed && (keys["ArrowUp"] || keys["w"] || keys["W"]) && !this.isJumping) {
+      this.dy = this.jumpPower;
+      this.isJumping = true;
+      jumpPressed = true;
+    }
+    this.y += this.dy;
+    if (this.y >= GROUND_Y - this.height + 70) {
+      this.y = GROUND_Y - this.height + 70;
+      this.dy = 0;
+      this.isJumping = false;
+    }
+  }
+  draw() {
+    const img = this.isJumping ? images.playerJump : this.isDucking ? images.playerDuck : images.player;
+    ctx.drawImage(img, this.x, this.y, this.width, this.height);
+  }
+  get hitbox() {
+    return {
+      x: this.x,
+      y: this.isDucking ? this.y + 30 : this.y,
+      width: this.width,
+      height: this.isDucking ? this.height / 2 : this.height
+    };
+  }
+}
+
+const player = new Player();
+
+function drawLoopingLayer(image, x, speed) {
+  const scale = canvas.height / image.height;
+  const drawWidth = image.width * scale;
+  x -= speed;
+  if (x <= -drawWidth) x += drawWidth;
+  ctx.drawImage(image, x, 0, drawWidth, canvas.height);
+  ctx.drawImage(image, x + drawWidth, 0, drawWidth, canvas.height);
+  return x;
+}
+
+function drawLoopingRoad(image, x, y, height, speed) {
+  const scale = height / image.height;
+  const drawWidth = image.width * scale;
+  x -= speed;
+  if (x <= -drawWidth) x += drawWidth;
+
+  for (let i = 0; i <= Math.ceil(canvas.width / drawWidth); i++) {
+    ctx.drawImage(image, x + i * drawWidth, y, drawWidth, height);
+  }
+
+  return x;
+}
+
+
+function spawnCoin() {
+  const minY = GROUND_Y - 450;
+  const maxY = GROUND_Y - 130;
+  const y = Math.random() * (maxY - minY) + minY - 20;  // raised coins slightly
+  coins.push({ x: canvas.width, y: y, width: 40, height: 40 });
+}
+
+function spawnObstacle() {
+  const type = Math.random();
+  if (groundTrapSpawningEnabled) {
+    const newObstacle = type < 0.5 ? new Obstacle(canvas.width, 80, 140) : new Obstacle(canvas.width, 80, 80);
+    newObstacle.speed = obstacleSpeed + 1.2;
+
+    const lastObstacle = obstacles[obstacles.length - 1];
+    const minSpacing = Math.max(150, 250 - difficultyLevel * 10);
+
+    if (!lastObstacle || lastObstacle.x + lastObstacle.width < canvas.width - minSpacing) {
+      obstacles.push(newObstacle);
+    }
+  }
+
+  if (type > (0.5 - difficultyLevel * 0.02)) {
+    const bird = new Bird(canvas.width, 60, 60);
+    airborneObstacles.push(bird);
+  }
+}
+
+function resetGame() {
+  score = 0;
+  difficultyLevel = 0;
+  obstacleSpeed = 3;
+  obstacleInterval = 200;
+  difficultyTimer = 0;
+  frameCount = 0;
+  obstacles = [];
+  airborneObstacles = [];
+  coins = [];
+  gameOver = false;
+  isPaused = false;
+  pausedSnapshot = null;
+  gameOverSnapshot = null;
+  player.y = GROUND_Y - player.height + 70;
+  player.dy = 0;
+  player.isJumping = false;
+  jumpPressed = false;
+}
+
+function gameLoop() {
+  if (!gameStarted) {
+    drawStartMenu();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  if (isPaused) {
+    drawPauseMenu();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+  ++frameCount;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(images.mainBg, 0, 0, canvas.width, canvas.height);
+  
+  bgX1 = drawLoopingLayer(images.bg1, bgX1, bgSpeed1);
+  bgX2 = drawLoopingLayer(images.bg2, bgX2, bgSpeed2);
+  bgX3 = drawLoopingLayer(images.bg3, bgX3, bgSpeed3);
+  roadX = drawLoopingRoad(images.road, roadX, GROUND_Y - 20, 160, 4);
+
+  if (!gameOver) {
+    player.update();
+    ctx.save();
+    ctx.globalAlpha = isAttacking ? 0.5 : 1.0;
+    player.draw();
+    ctx.restore();
+    if (isAttacking) {
+    ctx.drawImage(images.slash, player.x + player.width - 20, player.y + 20, 100, 100);
+    if (debugMode) {
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(player.x + player.width - 30, player.y + 10, 120, 120);
+    }
+    }
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const obs = obstacles[i];
+      obs.speed = obstacleSpeed + 1.2;
+      obs.update();
+      obs.draw();
+      if (debugMode) {
+        const bx = obs.x + obs.width * 0.05 / 2;
+        const by = obs.y + obs.height * 0.05 / 2;
+        const bWidth = obs.width * (1 - 0.05);
+        const bHeight = obs.height * (1 - 0.05);
+        ctx.strokeStyle = 'red';
+        ctx.strokeRect(bx, by, bWidth, bHeight);
+      }
+
+      if (obs.isColliding(player)) {
+        gameOver = !debugMode;
+        if (gameOver) {
+          const snapshot = document.createElement("canvas");
+          snapshot.width = canvas.width;
+          snapshot.height = canvas.height;
+          const snapCtx = snapshot.getContext("2d");
+          snapCtx.drawImage(canvas, 0, 0);
+          gameOverSnapshot = snapshot;
+        }
+      }
+      if (obs.x + obs.width < player.x && !obs.scored) {
+        score++;
+        obs.scored = true;
+      }
+      if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+    }
+    for (let i = airborneObstacles.length - 1; i >= 0; i--) {
+      const bird = airborneObstacles[i];
+      bird.update();
+      bird.draw();
+      if (debugMode) {
+        const bx = bird.x + bird.width * 0.05 / 2;
+        const by = bird.y + bird.height * 0.05 / 2;
+        const bWidth = bird.width * (1 - 0.05);
+        const bHeight = bird.height * (1 - 0.05);
+        ctx.strokeStyle = 'red';
+        ctx.strokeRect(bx, by, bWidth, bHeight);
+      }
+
+      const slashHitbox = isAttacking ? {
+        x: player.x + player.width - 30,
+        y: player.y + 10,
+        width: 120,
+        height: 120
+      } : null;
+
+      if (debugMode && isAttacking && slashHitbox) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(slashHitbox.x, slashHitbox.y, slashHitbox.width, slashHitbox.height);
+      }
+
+      if (isAttacking && slashHitbox &&
+          bird.x < slashHitbox.x + slashHitbox.width &&
+          bird.x + bird.width > slashHitbox.x &&
+          bird.y < slashHitbox.y + slashHitbox.height &&
+          bird.y + bird.height > slashHitbox.y) {
+        airborneObstacles.splice(i, 1);
+        continue;
+      }
+
+      if (bird.isColliding(player)) {
+        gameOver = !debugMode;
+        if (gameOver) {
+          const snapshot = document.createElement("canvas");
+          snapshot.width = canvas.width;
+          snapshot.height = canvas.height;
+          const snapCtx = snapshot.getContext("2d");
+          snapCtx.drawImage(canvas, 0, 0);
+          gameOverSnapshot = snapshot;
+        }
+      }
+      if (bird.x + bird.width < 0) airborneObstacles.splice(i, 1);
+    }
+    if (isAttacking && attackTimer > 0) {
+      attackTimer--;
+      if (attackTimer === 0) isAttacking = false;
+    }
+
+      if (frameCount % obstacleInterval === 0) {
+    spawnObstacle();
+  }
+
+  if (frameCount % Math.max(90, 180 - difficultyLevel * 10) === 0) {
+    spawnCoin();
+  }
+    if (++difficultyTimer % 900 === 0) {
+      difficultyLevel++;
+      obstacleSpeed += 0.5 + difficultyLevel * 0.05;
+      if (obstacleInterval > 100) {
+        obstacleInterval -= 10;
+      }
+    }
+  } else {
+    drawGameOver();
+  }
+  ctx.fillStyle = '#222';
+  ctx.font = '28px sans-serif';
+    // Draw and update coins
+  for (let i = coins.length - 1; i >= 0; i--) {
+    const coin = coins[i];
+    coin.x -= 4;
+    ctx.drawImage(images.coin, coin.x, coin.y, coin.width, coin.height);
+
+    // Collision with player
+    const px = player.hitbox;
+    if (
+      coin.x < px.x + px.width &&
+      coin.x + coin.width > px.x &&
+      coin.y < px.y + px.height &&
+      coin.y + coin.height > px.y
+    ) {
+      coins.splice(i, 1);
+      score += 5; // Bonus for coin collection
+    }
+
+    if (coin.x + coin.width < 0) coins.splice(i, 1);
+  }
+
+  ctx.fillText("Score: " + score, 20, 40);
+  ctx.fillText("Difficulty: " + difficultyLevel, 20, 70);
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Start the game after loading images
+let loadedImages = 0;
+const totalImages = Object.keys(imageSources).length;
+for (let key in imageSources) {
+  images[key] = new Image();
+  images[key].src = imageSources[key];
+  images[key].onload = () => {
+    loadedImages++;
+    if (loadedImages === totalImages) {
+      requestAnimationFrame(gameLoop);
+    }
+  };
+}
+
+// Input Handling and Menu Logic
+canvas.addEventListener("click", e => {
+  if (!gameStarted && e.offsetX >= buttonX && e.offsetX <= buttonX + buttonWidth && e.offsetY >= buttonY && e.offsetY <= buttonY + buttonHeight) {
+    gameStarted = true;
+  }
+
+  const { x, y } = e;
+  if (isPaused) {
+    drawPauseMenu();
+    if (x >= resumeButtonBounds.x && x <= resumeButtonBounds.x + resumeButtonBounds.width && y >= resumeButtonBounds.y && y <= resumeButtonBounds.y + resumeButtonBounds.height) {
+      isPaused = false;
+      pausedSnapshot = null;
+    } else if (x >= retryButtonBounds.x && x <= retryButtonBounds.x + retryButtonBounds.width && y >= retryButtonBounds.y && y <= retryButtonBounds.y + retryButtonBounds.height) {
+      resetGame();
+      isPaused = false;
+    } else if (x >= mainMenuButtonBounds.x && x <= mainMenuButtonBounds.x + mainMenuButtonBounds.width && y >= mainMenuButtonBounds.y && y <= mainMenuButtonBounds.y + mainMenuButtonBounds.height) {
+      resetGame();
+      gameStarted = false;
+      isPaused = false;
+    }
+  }
+
+  if (gameOver) {
+    if (x >= retryButtonBounds.x && x <= retryButtonBounds.x + retryButtonBounds.width &&
+        y >= retryButtonBounds.y && y <= retryButtonBounds.y + retryButtonBounds.height) {
+      resetGame();
+      return;
+    }
+    if (x >= mainMenuButtonBounds.x && x <= mainMenuButtonBounds.x + mainMenuButtonBounds.width && y >= mainMenuButtonBounds.y && y <= mainMenuButtonBounds.y + mainMenuButtonBounds.height) {
+      resetGame();
+      gameStarted = false;
+    }
+  }
+});
+
+canvas.addEventListener("mousemove", e => {
+  mouseX = e.offsetX;
+  mouseY = e.offsetY;
+  isHoveringStart = gameStarted === false && mouseX >= buttonX && mouseX <= buttonX + buttonWidth && mouseY >= buttonY && mouseY <= buttonY + buttonHeight;
+});
+
+window.addEventListener("keydown", e => {
+  console.log('keydown:', e.key);
+  if ((e.key.toLowerCase() === "f" || e.key === " ") && !isAttacking) {
+    isAttacking = true;
+    attackTimer = ATTACK_DURATION;
+  }
+  if (e.key.toLowerCase() === "d") debugMode = !debugMode;
+  keys[e.key] = true;
+  if (e.key === "Escape" && gameStarted && !gameOver) {
+    isPaused = !isPaused;
+    if (isPaused) {
+      const snapshot = document.createElement("canvas");
+      snapshot.width = canvas.width;
+      snapshot.height = canvas.height;
+      const snapCtx = snapshot.getContext("2d");
+      snapCtx.drawImage(canvas, 0, 0);
+      pausedSnapshot = snapshot;
+    }
+  }
+});
+
+window.addEventListener("keyup", e => {
+  keys[e.key] = false;
+  if (e.key === " " || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
+    jumpPressed = false;
+  }
+});
+
+
+
+function drawStartMenu() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(images.mainBg, 0, 0, canvas.width, canvas.height);
+
+  const ratio = images.logo.width / images.logo.height;
+  const height = 460;
+  const width = height * ratio;
+  const x = canvas.width / 2 - width / 2 - 20;
+  const y = 100;
+  ctx.drawImage(images.logo, x, y, width, height);
+
+  const btnRatio = images.startButton.width / images.startButton.height;
+  const btnHeight = 160;
+  const btnWidth = btnHeight * btnRatio;
+  buttonX = canvas.width / 2 - btnWidth / 2 + 3;
+  buttonY = y + height + 40;
+  buttonWidth = btnWidth;
+  buttonHeight = btnHeight;
+
+  const btnImage = isHoveringStart ? images.startButtonHover : images.startButton;
+  ctx.drawImage(btnImage, buttonX, buttonY, btnWidth, btnHeight);
+}
+
+function drawPauseMenu() {
+  const showDebug = debugMode;
+  if (!pausedSnapshot) return;
+  ctx.save();
+  ctx.filter = "blur(6px)";
+  ctx.drawImage(pausedSnapshot, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  const pauseRatio = images.pauseTitle.width / images.pauseTitle.height;
+  const pauseHeight = 300;
+  const pauseWidth = pauseHeight * pauseRatio;
+  const pauseX = canvas.width / 2 - pauseWidth / 2;
+  const pauseY = 60;
+  ctx.drawImage(images.pauseTitle, pauseX, pauseY, pauseWidth, pauseHeight);
+
+  const resumeRatio = images.resumeButton.width / images.resumeButton.height;
+  const resumeHeight = 180;
+  const resumeWidth = resumeHeight * resumeRatio;
+  const retryRatio = images.retryButton.width / images.retryButton.height;
+  const retryHeight = 160;
+  const retryWidth = retryHeight * retryRatio;
+  const totalWidth = resumeWidth + retryWidth + 40;
+  const resumeX = canvas.width / 2 - totalWidth / 2;
+  const retryX = resumeX + resumeWidth + 40;
+  const buttonY = pauseY + pauseHeight - 100;
+
+  resumeButtonBounds = {
+    x: resumeX - 5,
+    y: buttonY + 60,
+    width: 210,
+    height: 50
+  };
+  const isHoveringResume = mouseX >= resumeButtonBounds.x && mouseX <= resumeButtonBounds.x + resumeButtonBounds.width && mouseY >= resumeButtonBounds.y && mouseY <= resumeButtonBounds.y + resumeButtonBounds.height;
+  const resumeImage = isHoveringResume ? images.resumeButtonHover : images.resumeButton;
+  ctx.drawImage(resumeImage, resumeX, buttonY - 5, resumeWidth, resumeHeight);
+
+  retryButtonBounds = {
+    x: retryX + 5,
+    y: buttonY + 55,
+    width: 200,
+    height: 50
+  };
+  const isHoveringRetry = mouseX >= retryButtonBounds.x && mouseX <= retryButtonBounds.x + retryButtonBounds.width && mouseY >= retryButtonBounds.y && mouseY <= retryButtonBounds.y + retryButtonBounds.height;
+  const retryImage = isHoveringRetry ? images.retryButtonHover : images.retryButton;
+  ctx.drawImage(retryImage, retryX, buttonY, retryWidth, retryHeight);
+
+  const menuRatio = images.mainMenu.width / images.mainMenu.height;
+  const menuHeight = 160;
+  const menuWidth = retryWidth;
+  const menuX = canvas.width / 2 - menuWidth / 2;
+  const menuY = buttonY + retryHeight - 40;
+
+  const isHoveringMainMenu = mouseX >= menuX && mouseX <= menuX + menuWidth && mouseY >= menuY && mouseY <= menuY + menuHeight;
+  const mainMenuImage = isHoveringMainMenu ? images.mainMenuHover : images.mainMenu;
+  ctx.drawImage(mainMenuImage, menuX, menuY, menuWidth, menuHeight);
+  mainMenuButtonBounds = {
+    x: menuX,
+    y: menuY,
+    width: menuWidth,
+    height: menuHeight
+  };
+
+  // Debug rectangles
+  if (debugMode) {
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(resumeButtonBounds.x, resumeButtonBounds.y, resumeButtonBounds.width, resumeButtonBounds.height);
+    ctx.strokeRect(retryButtonBounds.x, retryButtonBounds.y, retryButtonBounds.width, retryButtonBounds.height);
+    ctx.strokeRect(mainMenuButtonBounds.x, mainMenuButtonBounds.y, mainMenuButtonBounds.width, mainMenuButtonBounds.height);
+  }
+}
+
+function drawGameOver() {
+  if (gameOverSnapshot) {
+    ctx.save();
+    ctx.filter = "blur(6px)";
+    ctx.drawImage(gameOverSnapshot, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+  const ratio = images.gameOverTitle.width / images.gameOverTitle.height;
+  const height = 300;
+  const width = height * ratio;
+  const x = canvas.width / 2 - width / 2;
+  const y = 50;
+  ctx.drawImage(images.gameOverTitle, x, y, width, height);
+
+  const retryRatio = images.retryButton.width / images.retryButton.height;
+  const retryHeight = 160;
+  const retryWidth = retryHeight * retryRatio;
+
+  const menuRatio = images.mainMenu.width / images.mainMenu.height;
+  const menuHeight = 160;
+  const menuWidth = retryWidth;
+
+  const spacing = 40;
+  const totalWidth = retryWidth + spacing + menuWidth;
+
+  const retryX = canvas.width / 2 - totalWidth / 2;
+  const retryY = y + height + 40;
+  const menuX = retryX + retryWidth + spacing;
+  const menuY = retryY;
+  const isHoveringMainMenu = mouseX >= menuX && mouseX <= menuX + menuWidth && mouseY >= menuY && mouseY <= menuY + menuHeight;
+  const mainMenuImage = isHoveringMainMenu ? images.mainMenuHover : images.mainMenu;
+  ctx.drawImage(mainMenuImage, menuX, menuY, menuWidth, menuHeight);
+  retryButtonBounds = { x: retryX, y: retryY, width: retryWidth, height: retryHeight };
+  mainMenuButtonBounds = { x: menuX, y: menuY, width: menuWidth, height: menuHeight };
+}
+</script>
+</body>
+</html>
+
