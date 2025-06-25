@@ -535,12 +535,14 @@ canvas.addEventListener("click", e => {
 
   if (gameOver) {
     if (x >= retryButtonBounds.x && x <= retryButtonBounds.x + retryButtonBounds.width &&
-        y >= retryButtonBounds.y && y <= retryButtonBounds.y + retryButtonBounds.height) {
-      resetGame();
+      y >= retryButtonBounds.y && y <= retryButtonBounds.y + retryButtonBounds.height) {
+    sounds.click.play();
+    resetGame();
       return;
     }
     if (x >= mainMenuButtonBounds.x && x <= mainMenuButtonBounds.x + mainMenuButtonBounds.width && y >= mainMenuButtonBounds.y && y <= mainMenuButtonBounds.y + mainMenuButtonBounds.height) {
-      resetGame();
+    sounds.click.play();
+    resetGame();
       gameStarted = false;
     }
   }
