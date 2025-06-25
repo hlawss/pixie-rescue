@@ -480,7 +480,7 @@ window.addEventListener("keydown", e => {
     isAttacking = true;
     attackTimer = ATTACK_DURATION;
   }
-  if (e.key.toLowerCase() === "d") debugMode = !debugMode;
+  if (e.key.toLowerCase() === "k") debugMode = !debugMode;
   keys[e.key] = true;
   if (e.key === "Escape" && gameStarted && !gameOver) {
     isPaused = !isPaused;
