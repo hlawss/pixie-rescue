@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+  if (location.hostname === "hlawss.github.io") {
+    const base = document.createElement("base");
+    base.href = "/pixie-rescue/";
+    document.head.appendChild(base);
+  }
+</script>
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -562,7 +569,7 @@ window.addEventListener("keydown", e => {
     attackTimer = ATTACK_DURATION;
     // We will play the slash sound in the game loop only if no bird is hit
   }
-  if (e.key.toLowerCase() === "d") debugMode = !debugMode;
+  if (e.key.toLowerCase() === "k") debugMode = !debugMode;
   keys[e.key] = true;
   if (e.key === "Escape" && gameStarted && !gameOver) {
     isPaused = !isPaused;
