@@ -14,8 +14,59 @@
 <canvas id="game"></canvas>
 <script>
 // Image loading
-const images = {};
+const images = {
+  creditButtonHover: "images/creditoutline.png",
+  creditButton: "images/credit.png",
+  coin: "images/coin.png",
+  slash: "images/slash.png",
+  road: "images/road2.png",
+  bird: "images/bird.png",
+  mainMenuHover: "images/mainmenuhighlight.png",
+  retryButtonHover: "images/retryoutline.png",
+  resumeButtonHover: "images/resumehighlight.png",
+  mainMenu: "images/mainm.png",
+  player: "player.png",
+  playerDuck: "player-duck.png",
+  playerJump: "player-jump.png",
+  obstacle: "obstacle.png",
+  logo: "pixie-logo.png",
+  startButton: "images/startgame.png",
+  startButtonHover: "images/startgamehighlight.png",
+  pauseTitle: "pause.png",
+  resumeButton: "images/resume.png",
+  retryButton: "images/retry.png",
+  gameOverTitle: "images/gameover.png",
+  bg1: "cloud_background.png",
+  bg2: "cloud_midground.png",
+  bg3: "cloud_foreground.png",
+  mainBg: "mainbg.png"
+};
+
+const sounds = {
+  coin: new Audio("sounds/coin.mp3"),
+  slash: new Audio("sounds/slash.mp3"),
+  slashHit: new Audio("sounds/slashhit.mp3"),
+  click: new Audio("sounds/click.mp3"),
+  fail: new Audio("sounds/fail.mp3")
+};
+
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  const clickSound = new Audio("sounds/coin.mp3");
+  clickSound.volume = 0;
+  clickSound.play().then(() => {
+    clickSound.pause();
+    clickSound.currentTime = 0;
+  }).catch(() => {
+    // Ignore error silently
+  });
+
+}
 const imageSources = {
+  creditButtonHover: "images/creditoutline.png",
+  creditButton: "images/credit.png",
   coin: "images/coin.png",
   slash: "images/slash.png",
   road: "images/road2.png",
@@ -88,7 +139,7 @@ let groundTrapSpawningEnabled = true;
 class Bird {
   constructor(x, width, height) {
     this.x = x;
-    this.y = Math.random() * (GROUND_Y - 250 - 100) + 100;
+    this.y = Math.random() * (GROUND_Y - 150 - 100) + 200;
     this.width = width;
     this.height = height;
     this.speed = 2.5;
@@ -229,9 +280,14 @@ function spawnObstacle() {
     }
   }
 
-  if (type > (0.5 - difficultyLevel * 0.02)) {
+  if (Math.random() < 0.4 + difficultyLevel * 0.05) {
     const bird = new Bird(canvas.width, 60, 60);
     airborneObstacles.push(bird);
+    if (difficultyLevel > 4 && Math.random() < 0.3) {
+      const extraTrap = new Obstacle(canvas.width, 80, 80);
+      extraTrap.speed = obstacleSpeed + 1.2;
+      obstacles.push(extraTrap);
+    }
   }
 }
 
@@ -306,6 +362,7 @@ function gameLoop() {
 
       if (obs.isColliding(player)) {
         gameOver = !debugMode;
+        if (gameOver) sounds.fail.play();
         if (gameOver) {
           const snapshot = document.createElement("canvas");
           snapshot.width = canvas.width;
@@ -321,6 +378,7 @@ function gameLoop() {
       }
       if (obs.x + obs.width < 0) obstacles.splice(i, 1);
     }
+    let slashHitConnected = false;
     for (let i = airborneObstacles.length - 1; i >= 0; i--) {
       const bird = airborneObstacles[i];
       bird.update();
@@ -352,12 +410,15 @@ function gameLoop() {
           bird.x + bird.width > slashHitbox.x &&
           bird.y < slashHitbox.y + slashHitbox.height &&
           bird.y + bird.height > slashHitbox.y) {
+        sounds.slashHit.play();
+        slashHitConnected = true;
         airborneObstacles.splice(i, 1);
         continue;
       }
 
       if (bird.isColliding(player)) {
         gameOver = !debugMode;
+        if (gameOver) sounds.fail.play();
         if (gameOver) {
           const snapshot = document.createElement("canvas");
           snapshot.width = canvas.width;
@@ -371,7 +432,12 @@ function gameLoop() {
     }
     if (isAttacking && attackTimer > 0) {
       attackTimer--;
-      if (attackTimer === 0) isAttacking = false;
+      if (attackTimer === 0) {
+        isAttacking = false;
+        if (!slashHitConnected) {
+          sounds.slash.play();
+        }
+      }
     }
 
       if (frameCount % obstacleInterval === 0) {
@@ -381,11 +447,11 @@ function gameLoop() {
   if (frameCount % Math.max(90, 180 - difficultyLevel * 10) === 0) {
     spawnCoin();
   }
-    if (++difficultyTimer % 900 === 0) {
+    if (++difficultyTimer % 600 === 0) {
       difficultyLevel++;
-      obstacleSpeed += 0.5 + difficultyLevel * 0.05;
-      if (obstacleInterval > 100) {
-        obstacleInterval -= 10;
+      obstacleSpeed += 0.6 + difficultyLevel * 0.1;
+      if (obstacleInterval > 90) {
+        obstacleInterval -= 12;
       }
     }
   } else {
@@ -408,6 +474,7 @@ function gameLoop() {
       coin.y + coin.height > px.y
     ) {
       coins.splice(i, 1);
+      sounds.coin.play();
       score += 5; // Bonus for coin collection
     }
 
@@ -436,7 +503,14 @@ for (let key in imageSources) {
 
 // Input Handling and Menu Logic
 canvas.addEventListener("click", e => {
+  if (e.offsetX >= creditButtonBounds.x && e.offsetX <= creditButtonBounds.x + creditButtonBounds.width &&
+      e.offsetY >= creditButtonBounds.y && e.offsetY <= creditButtonBounds.y + creditButtonBounds.height) {
+    window.location.href = "credit.html";
+    return;
+  }
+  unlockAudio();
   if (!gameStarted && e.offsetX >= buttonX && e.offsetX <= buttonX + buttonWidth && e.offsetY >= buttonY && e.offsetY <= buttonY + buttonHeight) {
+    sounds.click.play();
     gameStarted = true;
   }
 
@@ -444,12 +518,15 @@ canvas.addEventListener("click", e => {
   if (isPaused) {
     drawPauseMenu();
     if (x >= resumeButtonBounds.x && x <= resumeButtonBounds.x + resumeButtonBounds.width && y >= resumeButtonBounds.y && y <= resumeButtonBounds.y + resumeButtonBounds.height) {
+      sounds.click.play();
       isPaused = false;
       pausedSnapshot = null;
     } else if (x >= retryButtonBounds.x && x <= retryButtonBounds.x + retryButtonBounds.width && y >= retryButtonBounds.y && y <= retryButtonBounds.y + retryButtonBounds.height) {
+      sounds.click.play();
       resetGame();
       isPaused = false;
     } else if (x >= mainMenuButtonBounds.x && x <= mainMenuButtonBounds.x + mainMenuButtonBounds.width && y >= mainMenuButtonBounds.y && y <= mainMenuButtonBounds.y + mainMenuButtonBounds.height) {
+      sounds.click.play();
       resetGame();
       gameStarted = false;
       isPaused = false;
@@ -476,12 +553,14 @@ canvas.addEventListener("mousemove", e => {
 });
 
 window.addEventListener("keydown", e => {
+  unlockAudio();
   console.log('keydown:', e.key);
   if ((e.key.toLowerCase() === "f" || e.key === " ") && !isAttacking) {
     isAttacking = true;
     attackTimer = ATTACK_DURATION;
+    // We will play the slash sound in the game loop only if no bird is hit
   }
-  if (e.key.toLowerCase() === "k") debugMode = !debugMode;
+  if (e.key.toLowerCase() === "d") debugMode = !debugMode;
   keys[e.key] = true;
   if (e.key === "Escape" && gameStarted && !gameOver) {
     isPaused = !isPaused;
@@ -505,6 +584,8 @@ window.addEventListener("keyup", e => {
 
 
 
+let creditButtonBounds = { x: 0, y: 0, width: 0, height: 0 };
+
 function drawStartMenu() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(images.mainBg, 0, 0, canvas.width, canvas.height);
@@ -526,6 +607,21 @@ function drawStartMenu() {
 
   const btnImage = isHoveringStart ? images.startButtonHover : images.startButton;
   ctx.drawImage(btnImage, buttonX, buttonY, btnWidth, btnHeight);
+
+  const creditRatio = images.creditButton.width / images.creditButton.height;
+  const creditHeight = 120;
+  const creditWidth = creditHeight * creditRatio;
+  const creditX = canvas.width / 2 - creditWidth / 2;
+  const creditY = buttonY + btnHeight + 30;
+  const isHoveringCredit = mouseX >= creditX && mouseX <= creditX + creditWidth && mouseY >= creditY && mouseY <= creditY + creditHeight;
+  const creditImage = isHoveringCredit ? images.creditButtonHover : images.creditButton;
+  ctx.drawImage(creditImage, creditX, creditY, creditWidth, creditHeight);
+  creditButtonBounds = {
+    x: creditX,
+    y: creditY,
+    width: creditWidth,
+    height: creditHeight
+  };
 }
 
 function drawPauseMenu() {
@@ -581,6 +677,8 @@ function drawPauseMenu() {
   const menuY = buttonY + retryHeight - 40;
 
   const isHoveringMainMenu = mouseX >= menuX && mouseX <= menuX + menuWidth && mouseY >= menuY && mouseY <= menuY + menuHeight;
+  
+
   const mainMenuImage = isHoveringMainMenu ? images.mainMenuHover : images.mainMenu;
   ctx.drawImage(mainMenuImage, menuX, menuY, menuWidth, menuHeight);
   mainMenuButtonBounds = {
@@ -632,6 +730,9 @@ function drawGameOver() {
   const isHoveringMainMenu = mouseX >= menuX && mouseX <= menuX + menuWidth && mouseY >= menuY && mouseY <= menuY + menuHeight;
   const mainMenuImage = isHoveringMainMenu ? images.mainMenuHover : images.mainMenu;
   ctx.drawImage(mainMenuImage, menuX, menuY, menuWidth, menuHeight);
+  const isHoveringRetry = mouseX >= retryX && mouseX <= retryX + retryWidth && mouseY >= retryY && mouseY <= retryY + retryHeight;
+  const retryImage = isHoveringRetry ? images.retryButtonHover : images.retryButton;
+  ctx.drawImage(retryImage, retryX, retryY, retryWidth, retryHeight);
   retryButtonBounds = { x: retryX, y: retryY, width: retryWidth, height: retryHeight };
   mainMenuButtonBounds = { x: menuX, y: menuY, width: menuWidth, height: menuHeight };
 }
